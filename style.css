@@ -21,10 +21,11 @@ body {
 .wrap {
   max-width: 1280px;
   margin: 24px auto;
-  padding: 0 16px 48px;
+  padding: 0 16px 80px;
 }
 header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   margin-bottom: 8px;
@@ -100,12 +101,15 @@ input[type='file'] {
   background: #101520;
   border-top: 1px solid var(--border);
 }
-.filters input {
+.filters input,
+.filters select {
   background: #0f1420;
   border: 1px solid var(--border);
   color: var(--text);
   padding: 8px 10px;
   border-radius: 8px;
+}
+.filters input {
   width: 200px;
 }
 .filters .group {

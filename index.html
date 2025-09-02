@@ -2,22 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Tank Battle Game</title>
+    <title>Trade Aggregator — Bought / Sold / Net</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="wrap">
-<th data-k="app_id">App ID</th>
-<th data-k="item_name">Item Name</th>
-<th class="num" data-k="price_cents">Price (¢)</th>
-<th class="num" data-k="quantity">Qty</th>
-<th class="num" data-k="total_cents">Total (¢)</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-</div>
-<div class="totals" id="totalsBought"></div>
+<div class="wrap">
 </section>
 
 
@@ -27,6 +16,9 @@
 
 <section class="panel" id="panel-sold">
 <div class="section-title">Sold</div>
+<div class="toolbar" style="border-top:1px solid var(--border); border-bottom:none;">
+<button class="btn" id="exportSold">Export Sold CSV</button>
+</div>
 <div class="table-wrap">
 <table id="tblSold">
 <thead>
@@ -51,6 +43,9 @@
 
 <section class="panel" id="panel-net">
 <div class="section-title">Net per Item (Sold - Bought)</div>
+<div class="toolbar" style="border-top:1px solid var(--border); border-bottom:none;">
+<button class="btn" id="exportNet">Export Net CSV</button>
+</div>
 <div class="table-wrap">
 <table id="tblNet">
 <thead>
@@ -62,6 +57,7 @@
 <th class="num" data-k="qty_net">Net Qty</th>
 <th class="num" data-k="avg_buy">Avg Buy (¢)</th>
 <th class="num" data-k="avg_sell">Avg Sell (¢)</th>
+<th class="num" data-k="pl_pct">P/L %</th>
 <th class="num" data-k="net_value">Net Value (¢)</th>
 </tr>
 </thead>
@@ -75,6 +71,15 @@
 <div style="height:18px"></div>
 
 
+
+<section class="panel" id="panel-summary">
+<div class="section-title">Summary</div>
+<div class="totals" id="totalsSummary"></div>
+</section>
+
+
+<p class="footnote">Place CSVs in <code>/data</code> (server) or load locally. Date filters apply before aggregation, then App/Name/Price filters apply to aggregated results. Exports include the currently filtered view. P/L % = <code>(avgSell / avgBuy − 1) × 100</code> (blank if avgBuy is 0).</p>
+</div>
 
 <section class="panel" id="panel-summary">
 <div class="section-title">Summary</div>
