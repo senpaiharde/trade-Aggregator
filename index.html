@@ -6,6 +6,84 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div class="wrap">
+<th data-k="app_id">App ID</th>
+<th data-k="item_name">Item Name</th>
+<th class="num" data-k="price_cents">Price (¢)</th>
+<th class="num" data-k="quantity">Qty</th>
+<th class="num" data-k="total_cents">Total (¢)</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+<div class="totals" id="totalsBought"></div>
+</section>
+
+
+<div style="height:18px"></div>
+
+
+
+<section class="panel" id="panel-sold">
+<div class="section-title">Sold</div>
+<div class="table-wrap">
+<table id="tblSold">
+<thead>
+<tr>
+<th data-k="app_id">App ID</th>
+<th data-k="item_name">Item Name</th>
+<th class="num" data-k="price_cents">Price (¢)</th>
+<th class="num" data-k="quantity">Qty</th>
+<th class="num" data-k="total_cents">Total (¢)</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+<div class="totals" id="totalsSold"></div>
+</section>
+
+
+<div style="height:18px"></div>
+
+
+
+<section class="panel" id="panel-net">
+<div class="section-title">Net per Item (Sold - Bought)</div>
+<div class="table-wrap">
+<table id="tblNet">
+<thead>
+<tr>
+<th data-k="app_id">App ID</th>
+<th data-k="item_name">Item Name</th>
+<th class="num" data-k="qty_buy">Buy Qty</th>
+<th class="num" data-k="qty_sell">Sell Qty</th>
+<th class="num" data-k="qty_net">Net Qty</th>
+<th class="num" data-k="avg_buy">Avg Buy (¢)</th>
+<th class="num" data-k="avg_sell">Avg Sell (¢)</th>
+<th class="num" data-k="net_value">Net Value (¢)</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+<div class="totals" id="totalsNet"></div>
+</section>
+
+
+<div style="height:18px"></div>
+
+
+
+<section class="panel" id="panel-summary">
+<div class="section-title">Summary</div>
+<div class="totals" id="totalsSummary"></div>
+</section>
+
+
+<p class="footnote">Place a unified CSV at <code>/data/transactions.csv</code> or use the Load button above. Rows are split by <code>type</code>: <em>purchase</em> → Bought, <em>sale</em> → Sold. Quantity stacks by key <code>item_id || (app_id + "::" + item_name)</code>. Per-item totals use weighted average prices. Summary now includes total quantities as well.</p>
+</div>
     <script src="script.js"></script>
   </body>
 </html>
