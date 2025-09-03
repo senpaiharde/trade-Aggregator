@@ -60,13 +60,85 @@ function getItemName(r) {
 function getItemId(r) {
   return r.item_id ?? r.itemid ?? r.id ?? '';
 }
+
+function parseMoneyShekelsToCents(v) {
+  if (v == null) return 0;
+  let s = String(v).trim();
+
+  s = s.replace(/[₪\u00A0\u2007\u202F]/g, '').trim();
+
+  const hasDot = s.includes('.');
+  const hasComma = s.includes(',');
+  if (!hasDot && hasComma) {
+    s = s.replace(/\./g, '');
+    s = s.replace(',', '.');
+  } else {
+    s = s.replace(/,/g, '');
+  }
+
+  const n = Number(s);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100);
+}
+function parseCents(v) {
+  const s = String(v).replace(/[,\s]/g, '');
+  const n = Number(s);
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+
+let PRICE_KEY = null;
+function pickPriceKey(rows) {
+  if (!rows || !rows.length) return null;
+  const keys = Object.keys(rows[0]);
+
+  const strong = /(price(_?cents)?|unit[_ ]?price|avg[_ ]?price|item[_ ]?price|amount|amt)$/i;
+
+  const sample = rows.slice(0, 200);
+  const scores = [];
+  for (const k of keys) {
+    let ok = 0,
+      hits = 0;
+    for (const r of sample) {
+      if (r[k] == null || r[k] === '') continue;
+      let cents;
+      if (/cents$/i.test(k)) cents = parseCents(r[k]);
+      else cents = parseMoneyShekelsToCents(r[k]);
+      if (cents !== 0) ok++;
+      hits++;
+    }
+    if (hits > 0) scores.push({ k, ok, weight: strong.test(k) ? 2 : 1 });
+  }
+  if (!scores.length) return null;
+
+  scores.sort((a, b) => b.ok * b.weight - a.ok * a.weight);
+  return scores[0].ok ? scores[0].k : null;
+}
+
 function getPriceCents(r) {
-  // prefer price_cents; else "price" is treated as shekels and scaled *100
-  if (r.price_cents != null && r.price_cents !== '') return toInt(r.price_cents);
-  if (r.cents != null && r.cents !== '') return toInt(r.cents);
-  if (r.price != null && r.price !== '') return Math.round(Number(r.price) * 100);
+  if (PRICE_KEY && r[PRICE_KEY] != null && r[PRICE_KEY] !== '') {
+    if (/cents$/i.test(PRICE_KEY)) return parseCents(r[PRICE_KEY]);
+    return parseMoneyShekelsToCents(r[PRICE_KEY]);
+  }
+  const candidates = [
+    'price_cents',
+    'cents',
+    'unit_price_cents',
+    'price',
+    'unit_price',
+    'avg_price',
+    'item_price',
+    'amount',
+    'amt',
+  ];
+  for (const key of candidates) {
+    if (r[key] != null && r[key] !== '') {
+      if (/cents$/i.test(key)) return parseCents(r[key]);
+      return parseMoneyShekelsToCents(r[key]);
+    }
+  }
   return 0;
 }
+
 function getQuantity(r) {
   const q = r.quantity ?? r.qty ?? r.count;
   return toQty(q);
@@ -530,6 +602,8 @@ async function autoLoadAllCSVs() {
     allNames.map((n) => fetchCSVRows('/data/' + encodeURIComponent(n)).catch(() => []))
   );
   state.allRaw = datasets.flat();
+  PRICE_KEY = pickPriceKey(state.allRaw); 
+  console.log('[TA] detected PRICE_KEY =', PRICE_KEY);
   applyFilters();
 }
 
