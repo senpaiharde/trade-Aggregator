@@ -1,4 +1,3 @@
-/* ===== CSV parsing ===== */
 function parseCSV(text) {
   const rows = [];
   let i = 0,
@@ -36,15 +35,80 @@ function parseCSV(text) {
   }
   if (!rows.length) return { headers: [], data: [] };
 
-  const headers = rows[0].map((h) => h.trim());
+  // Normalize headers: lower-case, replace spaces & symbols with "_"
+  const rawHeaders = rows[0].map((h) => h.trim());
+  const normHeader = (h) =>
+    h
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  const headers = rawHeaders.map(normHeader);
+
   const data = rows
     .slice(1)
-    .filter((r) => r.some((c) => c.trim() !== ''))
+    .filter((r) => r.some((c) => (c ?? '').trim() !== ''))
     .map((r) => Object.fromEntries(headers.map((h, idx) => [h, (r[idx] ?? '').trim()])));
   return { headers, data };
 }
 
-/* ===== Normalization helpers ===== */
+function getAppId(r) {
+  return r.app_id ?? r.appid ?? r.app ?? r.app__id ?? '';
+}
+function getItemName(r) {
+  return r.item_name ?? r.itemname ?? r.market_name ?? r.market_hash_name ?? r.name ?? '';
+}
+function getItemId(r) {
+  return r.item_id ?? r.itemid ?? r.id ?? '';
+}
+function getPriceCents(r) {
+  // prefer price_cents; else "price" is treated as shekels and scaled *100
+  if (r.price_cents != null && r.price_cents !== '') return toInt(r.price_cents);
+  if (r.cents != null && r.cents !== '') return toInt(r.cents);
+  if (r.price != null && r.price !== '') return Math.round(Number(r.price) * 100);
+  return 0;
+}
+function getQuantity(r) {
+  const q = r.quantity ?? r.qty ?? r.count;
+  return toQty(q);
+}
+
+/* ===== Normalization helpers (unchanged) ===== */
+function toInt(x) {
+  const n = Number(x);
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+function toQty(x) {
+  const n = Number(x);
+  return Number.isFinite(n) && n > 0 ? n | 0 : 1;
+}
+function normType(t) {
+  const s = String(t || '')
+    .trim()
+    .toLowerCase();
+  if (['sale', 'sold', 'sell'].includes(s)) return 'sold';
+  if (['purchase', 'buy', 'bought'].includes(s)) return 'bought';
+  return '';
+}
+function getTimestampMs(r) {
+  // works now with normalized headers too
+  const keys = ['timestamp', 'ts', 'time', 'date', 'created_at', 'datetime', 'updated_at'];
+  for (const k of keys) {
+    if (r[k] != null && r[k] !== '') {
+      const s = String(r[k]).trim();
+      if (/^\d{13}$/.test(s)) return Number(s);
+      if (/^\d{10}$/.test(s)) return Number(s) * 1000;
+      const ms = Date.parse(s);
+      return Number.isNaN(ms) ? NaN : ms;
+    }
+  }
+  return NaN;
+}
+function keyOf(r) {
+  const itemId = getItemId(r);
+  const app = getAppId(r);
+  const name = getItemName(r);
+  return itemId ? String(itemId) : `${app}::${name}`;
+}
 function keyOf(r) {
   const itemId = r.item_id || r.itemId || r.id || '';
   const app = r.app_id || r.appId || r.app || '';
@@ -91,23 +155,22 @@ function aggregate(rows) {
   const map = new Map();
   for (const r of rows) {
     const k = keyOf(r);
-    const app_id = r.app_id || r.appId || r.app || '';
-    const item_name =
-      r.item_name || r.itemName || r.market_name || r.market_hash_name || r.name || '';
-    const price = toInt(r.price_cents || r.priceCents || r.cents || r.price || 0);
-    const qty = toQty(r.quantity || r.qty || r.count || 1);
+    const app_id = getAppId(r);
+    const item_name = getItemName(r);
+    const price = getPriceCents(r);
+    const qty = getQuantity(r);
     const cur = map.get(k) || { key: k, app_id, item_name, qty: 0, sum: 0 };
     cur.qty += qty;
-    cur.sum += price * qty; // store cents
+    cur.sum += price * qty; // cents
     map.set(k, cur);
   }
   return Array.from(map.values()).map((x) => ({
     key: x.key,
     app_id: x.app_id,
     item_name: x.item_name,
-    price_cents: x.qty ? Math.round(x.sum / x.qty) : 0, // weighted avg (cents)
+    price_cents: x.qty ? Math.round(x.sum / x.qty) : 0,
     quantity: x.qty,
-    total_cents: x.sum, // cents
+    total_cents: x.sum,
     _sum_cents: x.sum,
   }));
 }
@@ -364,11 +427,10 @@ function applyFilters() {
           if (to != null && ms > to) return false;
           return true;
         });
-
-  // 2) Split + aggregate
-  const boughtAgg0 = aggregate(raw.filter((r) => normType(r.type) === 'bought'));
-  const soldAgg0 = aggregate(raw.filter((r) => normType(r.type) === 'sold'));
-
+  const boughtAgg0 = aggregate(
+    raw.filter((r) => normType(r.type || r.transaction_type) === 'bought')
+  );
+  const soldAgg0 = aggregate(raw.filter((r) => normType(r.type || r.transaction_type) === 'sold'));
   // 3) Attribute & price range (entered in ₪ -> compare in cents)
   const inRangeCents = (pCents) => {
     const p = Number(pCents);
@@ -393,7 +455,30 @@ function applyFilters() {
       return false;
     return true;
   };
-
+  function log(...a) {
+    console.log('[TA]', ...a);
+  }
+  async function autoLoadAllCSVs() {
+    await refreshDataList();
+    if (!state.serverFiles.length) {
+      log('No .csv files in /data');
+      state.allRaw = [];
+      applyFilters();
+      return;
+    }
+    const names = state.serverFiles.map((f) => f.name);
+    const datasets = await Promise.all(
+      names.map((n) =>
+        fetchCSVRows('/data/' + encodeURIComponent(n)).catch((e) => {
+          log('read fail', n, e);
+          return [];
+        })
+      )
+    );
+    state.allRaw = datasets.flat();
+    log('merged rows:', state.allRaw.length);
+    applyFilters();
+  }
   const ba = boughtAgg0.filter(fil).filter((r) => inRangeCents(r.price_cents));
   const sa = soldAgg0.filter(fil).filter((r) => inRangeCents(r.price_cents));
   const na = computeNet(ba, sa).filter((r) =>
